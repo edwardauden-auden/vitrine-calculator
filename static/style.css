@@ -245,6 +245,74 @@ button.primary:hover { background: #164a3d; }
   font-weight: 600;
 }
 
+.addons {
+  padding: 20px 0 10px;
+}
+.addons h2 {
+  text-align: center;
+  font-size: 1.6rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+}
+.addons .lead {
+  text-align: center;
+  color: var(--ink-soft);
+  max-width: 520px;
+  margin: 0 auto 30px;
+}
+
+.addon-grid {
+  max-width: 900px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+
+.addon-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 2px rgba(20,24,31,0.04);
+}
+
+.addon-card img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  display: block;
+  background: var(--accent-soft);
+}
+
+.addon-card h4 {
+  margin: 18px 18px 0;
+  font-size: 1.02rem;
+}
+
+.addon-card p {
+  margin: 8px 18px 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+.addon-cta {
+  display: inline-block;
+  margin: 14px 18px 20px;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+.addon-cta:hover { text-decoration: underline; }
+
+@media (max-width: 640px) {
+  .addon-grid { grid-template-columns: 1fr; }
+}
+
 .cta-band {
   max-width: 700px;
   margin: 40px auto 60px;
