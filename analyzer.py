@@ -72,10 +72,24 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
 
         page.wait_for_timeout(1500)  # let lazy-loaded galleries settle
 
+        # The screenshot is a nice-to-have preview, not something the score
+        # depends on. On this host, a full-page screenshot of an
+        # image-heavy listing can take longer than expected, and if we let
+        # a screenshot failure raise, it kills the whole analysis even
+        # though we already have everything we need from the DOM. So: try
+        # progressively cheaper screenshot attempts with more time each,
+        # and if all three fail, just continue without one instead of
+        # failing the entire request.
         try:
-            page.screenshot(path=screenshot_path, full_page=True, timeout=10000)
+            page.screenshot(path=screenshot_path, full_page=True, timeout=20000)
         except Exception:
-            page.screenshot(path=screenshot_path, timeout=10000)
+            try:
+                page.screenshot(path=screenshot_path, timeout=15000)
+            except Exception:
+                try:
+                    page.screenshot(path=screenshot_path, timeout=8000, clip={"x": 0, "y": 0, "width": 1100, "height": 800})
+                except Exception:
+                    pass
 
         body_text = page.inner_text("body").lower() if page.query_selector("body") else ""
 
