@@ -27,6 +27,31 @@ BLOCKED_MARKERS = ["captcha", "access denied", "are you a robot", "just a moment
 
 VIEWPORT = {"width": 1100, "height": 800}
 
+# Portals known to run anti-bot protection that blocks a plain local
+# Chromium every time — for these, trying the free local path first and
+# only falling back to ZenRows on failure means paying the FULL cost of
+# a doomed attempt (page load + scroll pass + screenshot retries, ~35-70s)
+# before even starting the real one. That was pushing total request time
+# past the gunicorn worker timeout and surfacing as a raw connection
+# reset to the visitor. For these domains we skip straight to ZenRows.
+KNOWN_BLOCKED_PORTALS = ["seloger.com", "leboncoin.fr", "bienici.com", "figaro.immo", "immo.lefigaro.fr", "explorimmo.com"]
+
+LOCAL_LAUNCH_ARGS = [
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--no-sandbox",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-default-apps",
+    "--disable-sync",
+    "--metrics-recording-only",
+    "--mute-audio",
+    "--no-first-run",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+    "--js-flags=--max-old-space-size=256",
+]
+
 
 class AnalysisFailed(Exception):
     def __init__(self, reason, screenshot_path=None):
@@ -36,82 +61,74 @@ class AnalysisFailed(Exception):
 
 
 def analyze_url(url: str, screenshot_path: str) -> dict:
+    zenrows_key = os.environ.get("ZENROWS_API_KEY", "").strip()
+    is_known_blocked_portal = any(domain in url.lower() for domain in KNOWN_BLOCKED_PORTALS)
+
     with sync_playwright() as p:
+        if is_known_blocked_portal and zenrows_key:
+            print(f"[ZENROWS] {url} matches a known-blocked portal — skipping local attempt, going straight to ZenRows", flush=True)
+            return _run_via_zenrows(p, url, screenshot_path, zenrows_key)
+
         # Memory-trimming flags: the free host tier this runs on has only
         # 512MB total, and a default Chromium launch alone can eat well
         # past that, causing the whole process to get OOM-killed. These
         # flags disable GPU compositing, shared-memory usage (/dev/shm is
         # tiny in most containers and a common crash cause), and other
         # background Chrome features we don't need for a screenshot+DOM-read.
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--no-sandbox",
-                "--disable-extensions",
-                "--disable-background-networking",
-                "--disable-default-apps",
-                "--disable-sync",
-                "--metrics-recording-only",
-                "--mute-audio",
-                "--no-first-run",
-                "--disable-backgrounding-occluded-windows",
-                "--disable-renderer-backgrounding",
-                "--js-flags=--max-old-space-size=256",
-            ],
-        )
+        browser = p.chromium.launch(headless=True, args=LOCAL_LAUNCH_ARGS)
         try:
             page = browser.new_page(viewport=VIEWPORT)
             try:
                 return _extract_from_page(page, url, screenshot_path)
             except AnalysisFailed as first_failure:
-                # Free, local Chromium got blocked (bot-detection) or
-                # timed out. If a ZenRows API key is configured, retry the
-                # exact same extraction through ZenRows' stealth browser
-                # instead — same DOM-reading logic via connect_over_cdp,
-                # just a different, harder-to-fingerprint browser on their
-                # end. Costs ZenRows credits, so it's a fallback, not the
-                # default path: only major portals (SeLoger, Leboncoin,
-                # Figaro Immo, Bien'ici) actually need it; plain agent
-                # sites work fine on the free local path above.
-                zenrows_key = os.environ.get("ZENROWS_API_KEY", "").strip()
+                # Blocked or timed out on a site we didn't already know
+                # about. If a ZenRows key is configured, retry once
+                # through it before giving up — same DOM-reading logic via
+                # connect_over_cdp, just a different, harder-to-fingerprint
+                # browser on their end.
                 if not zenrows_key:
                     print(f"[ZENROWS] no ZENROWS_API_KEY configured — skipping fallback for {url} ({first_failure.reason})", flush=True)
                     raise
                 print(f"[ZENROWS] local Chromium blocked/failed for {url} ({first_failure.reason}) — attempting ZenRows fallback", flush=True)
                 try:
-                    # proxy_region=eu: route through European residential
-                    # IPs — we're only ever targeting French sites, and a
-                    # non-French exit IP is one more thing DataDome-style
-                    # protection can flag. Auto-rotate + residential IPs
-                    # are already on by default per ZenRows' docs; this
-                    # just narrows the region.
-                    zr_browser = p.chromium.connect_over_cdp(
-                        f"wss://browser.zenrows.com?apikey={zenrows_key}&proxy_region=eu",
-                        timeout=20000,
-                    )
-                except Exception as e:
-                    # ZenRows itself unreachable/misconfigured — surface
-                    # the original bot-block reason, not a confusing
-                    # connection error about an internal fallback service.
-                    print(f"[ZENROWS] connect_over_cdp failed for {url}: {e}", flush=True)
-                    raise first_failure
-                try:
-                    zr_page = zr_browser.new_page(viewport=VIEWPORT)
-                    result = _extract_from_page(zr_page, url, screenshot_path)
-                    print(f"[ZENROWS] fallback succeeded for {url}", flush=True)
-                    return result
-                except AnalysisFailed as zr_failure:
-                    print(f"[ZENROWS] fallback also failed for {url}: {zr_failure.reason}", flush=True)
+                    return _run_via_zenrows(p, url, screenshot_path, zenrows_key)
+                except AnalysisFailed:
                     raise
                 except Exception as e:
                     print(f"[ZENROWS] fallback raised unexpected error for {url}: {e}", flush=True)
                     raise first_failure
-                finally:
-                    zr_browser.close()
         finally:
             browser.close()
+
+
+def _run_via_zenrows(p, url: str, screenshot_path: str, zenrows_key: str) -> dict:
+    try:
+        # proxy_region=eu: route through European residential IPs — we're
+        # only ever targeting French sites, and a non-French exit IP is
+        # one more thing DataDome-style protection can flag. Auto-rotate +
+        # residential IPs are already on by default per ZenRows' docs;
+        # this just narrows the region.
+        zr_browser = p.chromium.connect_over_cdp(
+            f"wss://browser.zenrows.com?apikey={zenrows_key}&proxy_region=eu",
+            timeout=20000,
+        )
+    except Exception as e:
+        print(f"[ZENROWS] connect_over_cdp failed for {url}: {e}", flush=True)
+        raise AnalysisFailed(
+            "Ce site bloque l'analyse automatique (protection anti-robot). "
+            "Collez les informations manuellement ci-dessous.",
+            screenshot_path=None,
+        )
+    try:
+        zr_page = zr_browser.new_page(viewport=VIEWPORT)
+        result = _extract_from_page(zr_page, url, screenshot_path)
+        print(f"[ZENROWS] succeeded for {url}", flush=True)
+        return result
+    except AnalysisFailed as zr_failure:
+        print(f"[ZENROWS] also failed for {url}: {zr_failure.reason}", flush=True)
+        raise
+    finally:
+        zr_browser.close()
 
 
 def _extract_from_page(page, url: str, screenshot_path: str) -> dict:
