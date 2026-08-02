@@ -17,12 +17,15 @@ so swapping in a stealth/proxy browser later doesn't change the scoring
 contract.
 """
 
+import os
 import re
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 from scoring import VIDEO_KEYWORDS, DPE_KEYWORDS, HERO_KEYWORDS
 
 BLOCKED_MARKERS = ["captcha", "access denied", "are you a robot", "just a moment", "cloudflare"]
+
+VIEWPORT = {"width": 1100, "height": 800}
 
 
 class AnalysisFailed(Exception):
@@ -58,16 +61,53 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
                 "--js-flags=--max-old-space-size=256",
             ],
         )
-        # Smaller viewport = smaller compositing/screenshot buffer = less
-        # peak memory during full-page capture.
-        page = browser.new_page(viewport={"width": 1100, "height": 800})
+        try:
+            page = browser.new_page(viewport=VIEWPORT)
+            try:
+                return _extract_from_page(page, url, screenshot_path)
+            except AnalysisFailed as first_failure:
+                # Free, local Chromium got blocked (bot-detection) or
+                # timed out. If a ZenRows API key is configured, retry the
+                # exact same extraction through ZenRows' stealth browser
+                # instead — same DOM-reading logic via connect_over_cdp,
+                # just a different, harder-to-fingerprint browser on their
+                # end. Costs ZenRows credits, so it's a fallback, not the
+                # default path: only major portals (SeLoger, Leboncoin,
+                # Figaro Immo, Bien'ici) actually need it; plain agent
+                # sites work fine on the free local path above.
+                zenrows_key = os.environ.get("ZENROWS_API_KEY", "").strip()
+                if not zenrows_key:
+                    raise
+                try:
+                    zr_browser = p.chromium.connect_over_cdp(
+                        f"wss://browser.zenrows.com?apikey={zenrows_key}",
+                        timeout=20000,
+                    )
+                except Exception:
+                    # ZenRows itself unreachable/misconfigured — surface
+                    # the original bot-block reason, not a confusing
+                    # connection error about an internal fallback service.
+                    raise first_failure
+                try:
+                    zr_page = zr_browser.new_page(viewport=VIEWPORT)
+                    return _extract_from_page(zr_page, url, screenshot_path)
+                except AnalysisFailed:
+                    raise
+                except Exception:
+                    raise first_failure
+                finally:
+                    zr_browser.close()
+        finally:
+            browser.close()
+
+
+def _extract_from_page(page, url: str, screenshot_path: str) -> dict:
         try:
             page.goto(url, wait_until="networkidle", timeout=20000)
         except PWTimeout:
             try:
                 page.goto(url, wait_until="domcontentloaded", timeout=15000)
             except Exception:
-                browser.close()
                 raise AnalysisFailed("La page n'a pas répondu à temps.")
 
         page.wait_for_timeout(1500)  # let lazy-loaded galleries settle
@@ -130,7 +170,6 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
         body_text = page.inner_text("body").lower() if page.query_selector("body") else ""
 
         if any(marker in body_text[:3000] for marker in BLOCKED_MARKERS):
-            browser.close()
             raise AnalysisFailed(
                 "Ce site bloque l'analyse automatique (protection anti-robot). "
                 "Collez les informations manuellement ci-dessous.",
@@ -258,8 +297,6 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
         except Exception:
             has_structured_data = False
         is_https = url.strip().lower().startswith("https://")
-
-        browser.close()
 
         return {
             "image_count": real_photo_count,
