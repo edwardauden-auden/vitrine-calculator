@@ -24,4 +24,9 @@ EXPOSE 8080
 # almost certainly what pushed memory over the limit and got the whole
 # container OOM-killed in a restart loop. One worker means requests queue
 # instead of running in parallel — slower under load, but it won't crash.
-CMD ["gunicorn", "--workers=1", "--threads=1", "--timeout=90", "--bind=0.0.0.0:8080", "app:app"]
+# timeout bumped 90 -> 150: a slow, image-heavy listing (long page load +
+# the scroll pass that triggers lazy-rendered content + screenshot
+# retries) can legitimately take over a minute on this host's CPU, and a
+# gunicorn worker timeout mid-request shows up to the visitor as a raw
+# 502 Bad Gateway from Render's proxy rather than our own error page.
+CMD ["gunicorn", "--workers=1", "--threads=1", "--timeout=150", "--bind=0.0.0.0:8080", "app:app"]

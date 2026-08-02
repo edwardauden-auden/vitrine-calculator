@@ -83,15 +83,15 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
         # still starts from the hero.
         try:
             last_height = 0
-            for _ in range(10):
-                page.mouse.wheel(0, 1400)
-                page.wait_for_timeout(250)
+            for _ in range(6):  # capped — this only needs to be "enough", not exhaustive
+                page.mouse.wheel(0, 1600)
+                page.wait_for_timeout(180)
                 height = page.evaluate("document.body.scrollHeight")
                 if height == last_height:
                     break
                 last_height = height
             page.evaluate("window.scrollTo(0, 0)")
-            page.wait_for_timeout(300)
+            page.wait_for_timeout(200)
         except Exception:
             pass
 
@@ -102,15 +102,18 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
         # though we already have everything we need from the DOM. So: try
         # progressively cheaper screenshot attempts with more time each,
         # and if all three fail, just continue without one instead of
-        # failing the entire request.
+        # failing the entire request. Kept deliberately tight (12s/8s/5s,
+        # not 20s/15s/8s) — on a slow/image-heavy page this whole chain
+        # was eating into the gunicorn worker's request timeout badly
+        # enough to surface as a raw 502 to the visitor.
         try:
-            page.screenshot(path=screenshot_path, full_page=True, timeout=20000)
+            page.screenshot(path=screenshot_path, full_page=True, timeout=12000)
         except Exception:
             try:
-                page.screenshot(path=screenshot_path, timeout=15000)
+                page.screenshot(path=screenshot_path, timeout=8000)
             except Exception:
                 try:
-                    page.screenshot(path=screenshot_path, timeout=8000, clip={"x": 0, "y": 0, "width": 1100, "height": 800})
+                    page.screenshot(path=screenshot_path, timeout=5000, clip={"x": 0, "y": 0, "width": 1100, "height": 800})
                 except Exception:
                     pass
 
