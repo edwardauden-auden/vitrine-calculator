@@ -1,9 +1,14 @@
+import logging
 import os
 import re
 import time
+import traceback
 import uuid
 
 from flask import Flask, render_template, request, redirect, url_for, jsonify
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("vitrine")
 
 from analyzer import analyze_url, AnalysisFailed
 from scoring import score_listing
@@ -98,8 +103,10 @@ def analyze():
         extraction = analyze_url(url, shot_path)
     except AnalysisFailed as e:
         auto_failed_reason = e.reason
+        logger.warning("Analysis failed gracefully for %s: %s", url, e.reason)
     except Exception as e:
         auto_failed_reason = "Une erreur inattendue est survenue pendant l'analyse automatique."
+        logger.error("Unexpected error analyzing %s: %s\n%s", url, e, traceback.format_exc())
 
     used_manual_fallback = False
     if extraction is None or (extraction.get("image_count", 0) == 0 and not extraction.get("description_text")):
