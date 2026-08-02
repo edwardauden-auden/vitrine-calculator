@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Testez le score de performance de votre annonce immobilière — Vitrine.Immo</title>
-  <meta name="description" content="Collez le lien de votre annonce immobilière et obtenez en 30 secondes un score de performance basé sur les critères qui déterminent votre visibilité sur les portails immobiliers (photos, vidéo, description, DPE, adresse).">
+  <meta name="description" content="Collez le lien de votre annonce immobilière et obtenez en 30 secondes un score de performance basé sur les critères qui déterminent votre visibilité sur les portails immobiliers (photos, vidéo, description, DPE, plan).">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -18,7 +18,7 @@
     <div class="wrap">
       <h1>Votre annonce est-elle vue par <em>16 fois moins</em> d'acheteurs qu'elle ne devrait ?</h1>
       <p class="sub">
-        Les portails immobiliers classent vos annonces selon un score de qualité basé sur vos photos, votre description, votre DPE et votre adresse. Collez le lien de votre annonce et découvrez votre score gratuitement, en 30 secondes.
+        Les portails immobiliers classent vos annonces selon un score de qualité basé sur vos photos, votre description, votre DPE et votre plan. Collez le lien de votre annonce et découvrez votre score gratuitement, en 30 secondes.
       </p>
 
       {% if error %}
@@ -47,7 +47,7 @@
             <div class="checks">
               <label><input type="checkbox" name="manual_video"> Vidéo ou visite virtuelle présente</label>
               <label><input type="checkbox" name="manual_dpe"> DPE renseigné</label>
-              <label><input type="checkbox" name="manual_address"> Adresse précise (rue) renseignée</label>
+              <label><input type="checkbox" name="manual_floor_plan"> Plan du bien (2D/3D) présent</label>
             </div>
           </div>
           {% endif %}

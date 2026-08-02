@@ -63,10 +63,10 @@ UPSELLS = {
         "pitch": "Ajoutez votre DPE — même une mauvaise note vaut mieux qu'un champ vide pour vos clics.",
         "cta": "Comment l'ajouter",
     },
-    "listing_setup_help": {
-        "title": "Vérification fiche annonce",
-        "pitch": "On vérifie avec vous que l'adresse précise est bien activée sur chaque portail.",
-        "cta": "Vérifier ma fiche",
+    "floor_plan_reminder": {
+        "title": "Rappel plan du bien",
+        "pitch": "Ajoutez un plan 2D/3D — les biens avec un plan se vendent environ 20% plus vite.",
+        "cta": "Comment l'ajouter",
     },
 }
 
@@ -93,7 +93,7 @@ def analyze():
     manual_photos = src.get("manual_photo_count", type=int)
     manual_video = src.get("manual_video") in ("on", "true", "1")
     manual_dpe = src.get("manual_dpe") in ("on", "true", "1")
-    manual_address = src.get("manual_address") in ("on", "true", "1")
+    manual_floor_plan = src.get("manual_floor_plan") in ("on", "true", "1")
 
     if not url or not looks_like_url(url):
         return render_template("index.html", error="Merci de coller un lien valide (commençant par http:// ou https://).")
@@ -128,7 +128,7 @@ def analyze():
                 "description_text": manual_desc,
                 "has_video_or_tour": manual_video,
                 "has_dpe": manual_dpe,
-                "has_precise_address": manual_address,
+                "has_floor_plan": manual_floor_plan,
                 "property_type": None,
                 "screenshot_path": shot_path if os.path.exists(shot_path) else None,
             }

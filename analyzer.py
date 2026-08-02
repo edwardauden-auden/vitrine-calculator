@@ -6,8 +6,8 @@ screenshot (this is what "the AI looks at the site" means concretely —
 today via DOM heuristics on the rendered page; the screenshot itself is
 saved and is the hook point for a real vision-model pass in v2), and pull
 structural signals out of the rendered DOM: image count, description
-text, presence of a video/virtual-tour element, DPE mention, address
-precision.
+text, presence of a video/virtual-tour element, DPE mention, floor plan
+presence.
 
 Important honesty note for v1: big portals (SeLoger, Bien'ici, Leboncoin,
 Figaro) run bot-detection that can block headless Chromium. When that
@@ -196,8 +196,25 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
             except Exception:
                 pass
 
-        # address precision: look for a street-style pattern (number + word) near "adresse"/postal code
-        has_precise_address = bool(re.search(r"\b\d{1,4}\s+(rue|avenue|impasse|boulevard|chemin|allée|place)\b", body_text))
+        # Floor plan (replaces an earlier "address precision" check — French
+        # listings never publish the exact street address publicly, so
+        # that was never a meaningful signal here). Check body text for
+        # the usual French phrasing, then fall back to image alt/src the
+        # same way the DPE check does, since a plan is very often just an
+        # embedded image with no surrounding readable text.
+        has_floor_plan = bool(re.search(r"\bplan(s)?\s*(du bien|2d|3d|intérieur|de l'appartement|de la maison)\b", body_text)) \
+            or "voir le plan" in body_text
+        if not has_floor_plan:
+            try:
+                plan_img_hints = page.eval_on_selector_all(
+                    "img",
+                    "els => els.map(e => ((e.getAttribute('alt') || '') + ' ' + (e.getAttribute('src') || '')).toLowerCase())"
+                )
+                has_floor_plan = any(
+                    kw in hint for hint in plan_img_hints for kw in ["floor-plan", "floorplan", "plan-2d", "plan_2d", "plan-3d", "plan_3d", "/plan."]
+                )
+            except Exception:
+                pass
 
         # best-effort description: longest paragraph-like text block
         paragraphs = page.eval_on_selector_all(
@@ -216,7 +233,7 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
             "description_text": description_text,
             "has_video_or_tour": has_video_or_tour,
             "has_dpe": has_dpe,
-            "has_precise_address": has_precise_address,
+            "has_floor_plan": has_floor_plan,
             "property_type": property_type,
             "screenshot_path": screenshot_path,
         }
