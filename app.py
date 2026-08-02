@@ -31,7 +31,11 @@ def add_cors_headers(response):
 
 @app.route("/health")
 def health():
-    return jsonify(status="ok")
+    # RENDER_GIT_COMMIT is set automatically by Render to the SHA it
+    # actually deployed — exposing it here lets us confirm from outside
+    # (curl/WebFetch) whether a given fix is really live yet, instead of
+    # guessing from timing or screenshotting the dashboard each time.
+    return jsonify(status="ok", commit=os.environ.get("RENDER_GIT_COMMIT", "unknown"))
 
 UPSELLS = {
     "upload_photos": {

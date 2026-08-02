@@ -90,6 +90,16 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
                 if height == last_height:
                     break
                 last_height = height
+            # Some scroll-reveal sections fetch their content over the
+            # network once they mount (not just a synchronous JS toggle),
+            # so give any request that just fired a moment to land before
+            # we read the DOM. Short + best-effort: if it never quiets
+            # down we just move on rather than eating into the request
+            # budget.
+            try:
+                page.wait_for_load_state("networkidle", timeout=4000)
+            except Exception:
+                pass
             page.evaluate("window.scrollTo(0, 0)")
             page.wait_for_timeout(200)
         except Exception:
