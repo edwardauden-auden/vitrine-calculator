@@ -43,7 +43,22 @@ class ScoreResult:
 
 
 VIDEO_KEYWORDS = ["visite virtuelle", "virtual tour", "matterport", "video", "vidéo", "3d tour"]
-DPE_KEYWORDS = ["dpe", "diagnostic de performance", "classe énergie", "consommation énergétique"]
+DPE_KEYWORDS = [
+    "dpe",
+    "diagnostic de performance",
+    "classe énergie",
+    "consommation énergétique",
+    # Broadened after a real miss: on junot.fr the actual gauge graphic
+    # (A-G bars) is a rendered image with no text in the DOM, but sites
+    # that embed it almost always still have a real, readable section
+    # heading or caption around it — these catch that heading even when
+    # the numbers themselves are unreadable pixels.
+    "diagnostics",
+    "classe climat",
+    "passoire énergétique",
+    "kg co2",
+    "kwh/m",
+]
 HERO_KEYWORDS = ["façade", "exterieur", "exterior", "jardin", "vue extérieure"]
 
 

@@ -146,6 +146,23 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
         has_video_or_tour = has_video_tag or has_iframe_tour or any(kw in body_text for kw in VIDEO_KEYWORDS)
 
         has_dpe = any(kw in body_text for kw in DPE_KEYWORDS)
+        if not has_dpe:
+            # The DPE gauge itself (the A-G colour scale) is very often a
+            # rendered image, not live text — many diagnostic tools export
+            # it as a flat graphic that agencies just embed as-is, so no
+            # amount of body-text keyword matching will ever see it. Fall
+            # back to checking alt text and image filenames, which are
+            # frequently still descriptive even when the pixels aren't.
+            try:
+                img_hints = page.eval_on_selector_all(
+                    "img",
+                    "els => els.map(e => ((e.getAttribute('alt') || '') + ' ' + (e.getAttribute('src') || '')).toLowerCase())"
+                )
+                has_dpe = any(
+                    kw in hint for hint in img_hints for kw in ["dpe", "diagnostic", "classe-energie", "classe_energie", "energie"]
+                )
+            except Exception:
+                pass
 
         # address precision: look for a street-style pattern (number + word) near "adresse"/postal code
         has_precise_address = bool(re.search(r"\b\d{1,4}\s+(rue|avenue|impasse|boulevard|chemin|allée|place)\b", body_text))
