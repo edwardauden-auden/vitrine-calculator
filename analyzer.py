@@ -276,6 +276,23 @@ def _extract_from_page(page, url: str, screenshot_path: str) -> dict:
                 real_photos_with_alt += 1
         image_alt_ratio = (real_photos_with_alt / real_photo_count) if real_photo_count else None
 
+        # Trust the site's own displayed photo count over our DOM count
+        # when we can find it. The class/id blocklist above helps on sites
+        # with descriptive markup, but modern React portals (SeLoger and
+        # similar) render with hashed/generated class names ("sc-a91f3b2")
+        # that carry no semantic hint at all, so the blocklist has nothing
+        # to match — on a real SeLoger listing it only trimmed 26 down to
+        # 25. These portals almost always show the real count as text next
+        # to the gallery ("Afficher les 16 photos", "Voir les 16 photos"),
+        # which is exactly what a human visitor sees and is immune to any
+        # of our DOM-scoping guesswork, so prefer it outright when present.
+        displayed_count_match = (
+            re.search(r"(?:afficher|voir)\s+les\s+(\d+)\s+photos?", body_text)
+            or re.search(r"(\d+)\s*/\s*\d+\s*photos?", body_text)
+        )
+        if displayed_count_match:
+            real_photo_count = int(displayed_count_match.group(1))
+
         has_video_tag = page.query_selector("video") is not None
         has_iframe_tour = any(
             kw in (page.query_selector("iframe").get_attribute("src") or "").lower()
