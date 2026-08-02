@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Testez le score de performance de votre annonce immobilière — AgentMediaBox</title>
+  <meta name="description" content="Collez le lien de votre annonce immobilière et obtenez en 30 secondes un score de performance basé sur les critères qui déterminent votre visibilité sur les portails immobiliers (photos, vidéo, description, DPE, adresse).">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="site">
+    <div class="wrap">
+      <div class="logo">Agent<span>MediaBox</span></div>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="wrap">
+      <h1>Votre annonce est-elle vue par <em>16 fois moins</em> d'acheteurs qu'elle ne devrait ?</h1>
+      <p class="sub">
+        Les portails immobiliers classent vos annonces selon un score de qualité basé sur vos photos, votre description, votre DPE et votre adresse. Collez le lien de votre annonce et découvrez votre score gratuitement, en 30 secondes.
+      </p>
+
+      {% if error %}
+        <div class="error-box">{{ error }}</div>
+      {% endif %}
+
+      <div class="form-card">
+        <form action="{{ url_for('analyze') }}" method="post">
+          <div class="url-row">
+            <input type="url" name="listing_url" placeholder="https://www.seloger.com/annonces/..." value="{{ prefill_url or '' }}" required>
+            <button class="primary" type="submit">Analyser mon annonce</button>
+          </div>
+          <p class="microcopy">Fonctionne avec votre site perso, SeLoger, Bien'ici, Leboncoin, Figaro Immo… Aucune inscription requise.</p>
+
+          {% if show_manual %}
+          <div class="manual-fallback">
+            <h3>On n'a pas pu lire automatiquement cette page — complétez ici pour avoir quand même votre score :</h3>
+            <div class="field-row">
+              <label>Nombre de photos dans l'annonce</label>
+              <input type="text" name="manual_photo_count" placeholder="ex: 12">
+            </div>
+            <div class="field-row">
+              <label>Collez le texte de votre description</label>
+              <textarea name="manual_description" rows="4" placeholder="Collez ici la description de votre annonce..."></textarea>
+            </div>
+            <div class="checks">
+              <label><input type="checkbox" name="manual_video"> Vidéo ou visite virtuelle présente</label>
+              <label><input type="checkbox" name="manual_dpe"> DPE renseigné</label>
+              <label><input type="checkbox" name="manual_address"> Adresse précise (rue) renseignée</label>
+            </div>
+          </div>
+          {% endif %}
+        </form>
+      </div>
+
+      <div class="trust-row">
+        <span>✓ Gratuit, aucune carte bancaire</span>
+        <span>✓ Résultat en 30 secondes</span>
+        <span>✓ Basé sur des données réelles de performance</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site">
+    <div class="wrap">
+      AgentMediaBox — outil gratuit pour agents et mandataires immobiliers en France.
+    </div>
+  </footer>
+</body>
+</html>

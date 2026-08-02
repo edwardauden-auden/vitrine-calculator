@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Score de performance de votre annonce — AgentMediaBox</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="site">
+    <div class="wrap">
+      <div class="logo">Agent<span>MediaBox</span></div>
+    </div>
+  </header>
+
+  <section class="score-hero">
+    <div class="wrap">
+      <div class="score-ring" style="--pct: {{ result.percent }}">
+        <div class="inner">
+          <div class="num">{{ result.percent }}%</div>
+          <div class="grade">Note {{ result.grade }}</div>
+        </div>
+      </div>
+      <h2>
+        {% if result.percent >= 80 %}Très bonne performance
+        {% elif result.percent >= 65 %}Bonne base, quelques points à corriger
+        {% elif result.percent >= 45 %}Performance moyenne — des gains rapides sont possibles
+        {% else %}Performance faible — cette annonce perd probablement des acheteurs
+        {% endif %}
+      </h2>
+      <p>Analyse de : {{ url }}</p>
+
+      {% if used_manual_fallback %}
+        <p class="microcopy" style="color:#b9750a;">Score calculé à partir des informations que vous avez saisies manuellement (lecture automatique impossible sur ce site).</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if screenshot_url %}
+  <div class="screenshot-wrap">
+    <img src="{{ screenshot_url }}" alt="Capture de la page analysée">
+  </div>
+  {% endif %}
+
+  <div class="signal-list">
+    {% for s, upsell in signals_with_upsell %}
+    <div class="signal">
+      <div class="dot {{ s.status }}"></div>
+      <div class="signal-body">
+        <div class="row1">
+          <h4>{{ s.label }}</h4>
+          <span class="pts">{{ s.points }}/{{ s.max_points }} pts</span>
+        </div>
+        <p>{{ s.detail }}</p>
+        {% if upsell %}
+        <div class="upsell-chip">🛠 {{ upsell.title }} — {{ upsell.pitch }}</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="wrap">
+    <div class="cta-band">
+      <h3>On peut corriger tout ça pour vous</h3>
+      <p>Photos manquantes, pas de vidéo, description trop courte : chaque point perdu ici coûte des acheteurs potentiels. Dites-nous ce que vous voulez corriger en priorité.</p>
+      <a class="primary-btn" href="mailto:contact@agentmediabox.fr?subject=Corriger%20mon%20annonce">Être recontacté</a>
+    </div>
+  </div>
+
+  <footer class="site">
+    <div class="wrap">
+      <a href="{{ url_for('index') }}" style="color:inherit;">← Analyser une autre annonce</a>
+      <br><br>
+      AgentMediaBox — outil gratuit pour agents et mandataires immobiliers en France.
+    </div>
+  </footer>
+</body>
+</html>
