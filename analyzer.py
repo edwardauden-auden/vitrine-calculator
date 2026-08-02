@@ -72,6 +72,29 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
 
         page.wait_for_timeout(1500)  # let lazy-loaded galleries settle
 
+        # Some listing sites (especially custom-built agency sites with
+        # scroll-reveal design, e.g. Junot-style luxury listings) only
+        # mount sections like the DPE/diagnostics block once they've
+        # actually scrolled into view — a plain page.goto() never triggers
+        # that, so keywords like "classe énergie" are invisible to us even
+        # though a human scrolling the page would see them clearly. Walk
+        # down the page in steps to trigger any scroll/IntersectionObserver
+        # based lazy content, then scroll back to the top so the screenshot
+        # still starts from the hero.
+        try:
+            last_height = 0
+            for _ in range(10):
+                page.mouse.wheel(0, 1400)
+                page.wait_for_timeout(250)
+                height = page.evaluate("document.body.scrollHeight")
+                if height == last_height:
+                    break
+                last_height = height
+            page.evaluate("window.scrollTo(0, 0)")
+            page.wait_for_timeout(300)
+        except Exception:
+            pass
+
         # The screenshot is a nice-to-have preview, not something the score
         # depends on. On this host, a full-page screenshot of an
         # image-heavy listing can take longer than expected, and if we let
