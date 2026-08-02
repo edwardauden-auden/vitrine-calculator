@@ -137,16 +137,38 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
                 screenshot_path=screenshot_path,
             )
 
-        images = page.query_selector_all("img")
-        # crude filter: ignore tiny icons/logos by checking natural size when available
+        # Gather size + resolved src for every <img> in one round trip
+        # (much cheaper than a bounding_box() call per element, which also
+        # matters for the request-timeout budget). currentSrc reflects the
+        # actually-loaded resource rather than a lazy-load placeholder.
+        img_data = page.eval_on_selector_all(
+            "img",
+            """els => els.map(e => {
+                const r = e.getBoundingClientRect();
+                return {
+                    src: e.currentSrc || e.src || e.getAttribute('data-src') || '',
+                    w: r.width,
+                    h: r.height,
+                };
+            })"""
+        )
+        # Crude filter: ignore tiny icons/logos by rendered size. Then
+        # dedupe by normalized src — carousel/gallery widgets very
+        # commonly clone slides in the DOM for a seamless infinite-loop
+        # effect (or repeat the same photo in a hero + thumbnail strip),
+        # which was inflating the count 4-5x on real listings (a 14-photo
+        # listing was reporting 70). Query strings are stripped since the
+        # same photo often reappears with different resize/cache params.
+        seen_srcs = set()
         real_photo_count = 0
-        for img in images:
-            try:
-                box = img.bounding_box()
-                if box and box["width"] >= 150 and box["height"] >= 100:
-                    real_photo_count += 1
-            except Exception:
+        for item in img_data:
+            if item["w"] < 150 or item["h"] < 100:
                 continue
+            normalized_src = item["src"].split("?")[0].strip()
+            if not normalized_src or normalized_src in seen_srcs:
+                continue
+            seen_srcs.add(normalized_src)
+            real_photo_count += 1
 
         has_video_tag = page.query_selector("video") is not None
         has_iframe_tour = any(
