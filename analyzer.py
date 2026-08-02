@@ -147,6 +147,7 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
                 const r = e.getBoundingClientRect();
                 return {
                     src: e.currentSrc || e.src || e.getAttribute('data-src') || '',
+                    alt: (e.getAttribute('alt') || '').trim(),
                     w: r.width,
                     h: r.height,
                 };
@@ -161,6 +162,7 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
         # same photo often reappears with different resize/cache params.
         seen_srcs = set()
         real_photo_count = 0
+        real_photos_with_alt = 0
         for item in img_data:
             if item["w"] < 150 or item["h"] < 100:
                 continue
@@ -169,6 +171,9 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
                 continue
             seen_srcs.add(normalized_src)
             real_photo_count += 1
+            if item["alt"]:
+                real_photos_with_alt += 1
+        image_alt_ratio = (real_photos_with_alt / real_photo_count) if real_photo_count else None
 
         has_video_tag = page.query_selector("video") is not None
         has_iframe_tour = any(
@@ -225,6 +230,35 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
 
         property_type = "studio" if "studio" in body_text[:500] else None
 
+        # Technical/on-page SEO signals — deliberately independent of the
+        # listing-quality scoring above. Runs on every URL, portal or
+        # personal site alike: on a portal listing the agent can't act on
+        # any of this directly, which is the point (it's the argument for
+        # owning a dedicated site instead).
+        try:
+            title_text = page.title() or ""
+        except Exception:
+            title_text = ""
+        try:
+            meta_description = page.eval_on_selector(
+                "meta[name='description']", "el => el.getAttribute('content') || ''"
+            ) or ""
+        except Exception:
+            meta_description = ""
+        try:
+            h1_count = len(page.query_selector_all("h1"))
+        except Exception:
+            h1_count = 0
+        try:
+            has_viewport_meta = page.query_selector("meta[name='viewport']") is not None
+        except Exception:
+            has_viewport_meta = False
+        try:
+            has_structured_data = page.query_selector("script[type='application/ld+json']") is not None
+        except Exception:
+            has_structured_data = False
+        is_https = url.strip().lower().startswith("https://")
+
         browser.close()
 
         return {
@@ -236,4 +270,13 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
             "has_floor_plan": has_floor_plan,
             "property_type": property_type,
             "screenshot_path": screenshot_path,
+            "seo": {
+                "title_text": title_text,
+                "meta_description": meta_description,
+                "h1_count": h1_count,
+                "image_alt_ratio": image_alt_ratio,
+                "has_viewport_meta": has_viewport_meta,
+                "is_https": is_https,
+                "has_structured_data": has_structured_data,
+            },
         }

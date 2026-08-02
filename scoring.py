@@ -155,6 +155,104 @@ def score_listing(extraction: dict) -> ScoreResult:
     return ScoreResult(total=total, max_total=max_total, grade=grade, signals=signals)
 
 
+def score_seo(seo_extraction: dict) -> ScoreResult:
+    """
+    Deliberately separate from score_listing(): that score mirrors
+    SeLoger's own published portal-visibility algorithm, which has
+    nothing to do with technical/on-page SEO. This one runs on *any*
+    link, portal or personal site alike — on a portal listing the agent
+    has no power to fix what it finds, and that's the point: it's the
+    argument for a dedicated site they do control.
+
+    seo_extraction keys:
+      - title_text: str | None
+      - meta_description: str | None
+      - h1_count: int
+      - image_alt_ratio: float | None  (0-1, share of real photos with alt text; None if no images)
+      - has_viewport_meta: bool
+      - is_https: bool
+      - has_structured_data: bool  (schema.org / JSON-LD anywhere on the page)
+    """
+    signals = []
+    total = 0
+
+    title = (seo_extraction.get("title_text") or "").strip()
+    title_len = len(title)
+    if 15 <= title_len <= 65:
+        pts, status, detail = 20, "good", f"Balise <title> présente ({title_len} caractères)."
+    elif title_len > 0:
+        pts, status, detail = 10, "warning", f"Balise <title> présente mais mal dimensionnée ({title_len} caractères — visez 15-65)."
+    else:
+        pts, status, detail = 0, "bad", "Aucune balise <title> détectée — c'est le premier élément lu par Google."
+    signals.append(Signal("seo_title", "Balise title", pts, 20, status, detail,
+                           upsell="seo_audit" if status != "good" else None))
+    total += pts
+
+    meta_desc = (seo_extraction.get("meta_description") or "").strip()
+    meta_len = len(meta_desc)
+    if 70 <= meta_len <= 170:
+        pts, status, detail = 20, "good", f"Meta description présente ({meta_len} caractères)."
+    elif meta_len > 0:
+        pts, status, detail = 10, "warning", f"Meta description présente mais mal dimensionnée ({meta_len} caractères — visez 70-170)."
+    else:
+        pts, status, detail = 0, "bad", "Aucune meta description détectée — Google en génère une au hasard à la place."
+    signals.append(Signal("seo_meta_description", "Meta description", pts, 20, status, detail,
+                           upsell="seo_audit" if status != "good" else None))
+    total += pts
+
+    h1_count = seo_extraction.get("h1_count", 0)
+    if h1_count == 1:
+        pts, status, detail = 15, "good", "Un seul titre H1 sur la page — structure claire pour Google."
+    elif h1_count == 0:
+        pts, status, detail = 0, "bad", "Aucun titre H1 détecté."
+    else:
+        pts, status, detail = 5, "warning", f"{h1_count} balises H1 détectées — Google préfère une hiérarchie claire avec un seul H1."
+    signals.append(Signal("seo_h1", "Structure des titres (H1)", pts, 15, status, detail,
+                           upsell="seo_audit" if status != "good" else None))
+    total += pts
+
+    alt_ratio = seo_extraction.get("image_alt_ratio")
+    if alt_ratio is None:
+        pts, status, detail = 8, "warning", "Aucune photo détectée pour vérifier le texte alternatif."
+    elif alt_ratio >= 0.8:
+        pts, status, detail = 15, "good", f"{round(alt_ratio * 100)}% des photos ont un texte alternatif renseigné."
+    elif alt_ratio >= 0.3:
+        pts, status, detail = 8, "warning", f"Seulement {round(alt_ratio * 100)}% des photos ont un texte alternatif — Google ne peut pas indexer le reste."
+    else:
+        pts, status, detail = 0, "bad", "Quasiment aucune photo n'a de texte alternatif — invisible pour la recherche d'images Google."
+    signals.append(Signal("seo_alt_text", "Texte alternatif des photos", pts, 15, status, detail,
+                           upsell="seo_audit" if status != "good" else None))
+    total += pts
+
+    if seo_extraction.get("is_https"):
+        pts, status, detail = 10, "good", "Le site est en HTTPS."
+    else:
+        pts, status, detail = 0, "bad", "Le site n'est pas en HTTPS — Google pénalise directement le classement, et les navigateurs affichent un avertissement."
+    signals.append(Signal("seo_https", "HTTPS", pts, 10, status, detail,
+                           upsell="seo_audit" if status != "good" else None))
+    total += pts
+
+    if seo_extraction.get("has_viewport_meta"):
+        pts, status, detail = 10, "good", "Le site est adapté mobile (balise viewport détectée)."
+    else:
+        pts, status, detail = 0, "bad", "Pas de balise viewport détectée — plus de 70% des recherches immobilières se font sur mobile."
+    signals.append(Signal("seo_mobile", "Compatibilité mobile", pts, 10, status, detail,
+                           upsell="seo_audit" if status != "good" else None))
+    total += pts
+
+    if seo_extraction.get("has_structured_data"):
+        pts, status, detail = 10, "good", "Données structurées (schema.org) détectées."
+    else:
+        pts, status, detail = 0, "bad", "Aucune donnée structurée détectée — Google ne peut pas afficher de résultat enrichi pour ce bien."
+    signals.append(Signal("seo_structured_data", "Données structurées", pts, 10, status, detail,
+                           upsell="seo_audit" if status != "good" else None))
+    total += pts
+
+    max_total = 20 + 20 + 15 + 15 + 10 + 10 + 10  # = 100
+    grade = _grade_for(total, max_total)
+    return ScoreResult(total=total, max_total=max_total, grade=grade, signals=signals)
+
+
 def _grade_for(total, max_total):
     pct = 100 * total / max_total
     if pct >= 80:

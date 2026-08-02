@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True)
 logger = logging.getLogger("vitrine")
 
 from analyzer import analyze_url, AnalysisFailed
-from scoring import score_listing
+from scoring import score_listing, score_seo
 
 app = Flask(__name__)
 SCREENSHOT_DIR = os.path.join(app.root_path, "static", "screenshots")
@@ -67,6 +67,11 @@ UPSELLS = {
         "title": "Rappel plan du bien",
         "pitch": "Ajoutez un plan 2D/3D — les biens avec un plan se vendent environ 20% plus vite.",
         "cta": "Comment l'ajouter",
+    },
+    "seo_audit": {
+        "title": "Audit et optimisation SEO",
+        "pitch": "Sur un portail, vous ne pouvez rien changer à ça. Sur votre propre site, si — on s'en occupe pour vous.",
+        "cta": "Voir l'offre SEO",
     },
 }
 
@@ -147,6 +152,18 @@ def analyze():
         upsell = UPSELLS.get(s.upsell) if s.upsell else None
         signals_with_upsell.append((s, upsell))
 
+    # SEO score needs real page data (title tag, meta description, etc.)
+    # that manual entry simply doesn't collect — showing a score built
+    # from all-missing fields would just read as an unfairly bad 0/100,
+    # so only compute it when the automatic analysis actually ran.
+    seo_result = None
+    seo_signals_with_upsell = []
+    if not used_manual_fallback and extraction.get("seo"):
+        seo_result = score_seo(extraction["seo"])
+        for s in seo_result.signals:
+            upsell = UPSELLS.get(s.upsell) if s.upsell else None
+            seo_signals_with_upsell.append((s, upsell))
+
     screenshot_url = None
     if extraction.get("screenshot_path") and os.path.exists(extraction["screenshot_path"]):
         screenshot_url = url_for("static", filename=f"screenshots/{os.path.basename(extraction['screenshot_path'])}")
@@ -156,6 +173,8 @@ def analyze():
         url=url,
         result=result,
         signals_with_upsell=signals_with_upsell,
+        seo_result=seo_result,
+        seo_signals_with_upsell=seo_signals_with_upsell,
         screenshot_url=screenshot_url,
         used_manual_fallback=used_manual_fallback,
         auto_failed_reason=auto_failed_reason,

@@ -60,6 +60,47 @@
     {% endfor %}
   </div>
 
+  {% if seo_result %}
+  <section class="seo-score">
+    <div class="wrap">
+      <div class="seo-score-header">
+        <div class="seo-ring" style="--pct: {{ seo_result.percent }}">
+          <div class="inner">
+            <div class="num">{{ seo_result.percent }}%</div>
+            <div class="grade">Note {{ seo_result.grade }}</div>
+          </div>
+        </div>
+        <div class="seo-score-intro">
+          <h2>Score SEO de la page</h2>
+          <p>
+            Indépendant du score ci-dessus : ceci mesure si Google peut bien comprendre et référencer cette page
+            (balises techniques, mobile, structure) — sur un portail comme SeLoger ou Leboncoin, vous ne pouvez
+            généralement rien y changer directement, mais c'est exactement ce qu'un site à vous permet de corriger.
+          </p>
+        </div>
+      </div>
+
+      <div class="signal-list">
+        {% for s, upsell in seo_signals_with_upsell %}
+        <div class="signal">
+          <div class="dot {{ s.status }}"></div>
+          <div class="signal-body">
+            <div class="row1">
+              <h4>{{ s.label }}</h4>
+              <span class="pts">{{ s.points }}/{{ s.max_points }} pts</span>
+            </div>
+            <p>{{ s.detail }}</p>
+            {% if upsell %}
+            <div class="upsell-chip">🛠 {{ upsell.title }} — {{ upsell.pitch }}</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   <section class="addons">
     <div class="wrap">
       <h2>Envie d'aller plus loin ?</h2>
