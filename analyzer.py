@@ -214,26 +214,58 @@ def _extract_from_page(page, url: str, screenshot_path: str) -> dict:
             "img",
             """els => els.map(e => {
                 const r = e.getBoundingClientRect();
+                // Walk up a few ancestors collecting class/id/data-testid
+                // text so we can recognise (and exclude) images that sit
+                // outside the actual photo gallery — map screenshots, DPE
+                // gauges, agency/agent avatars, partner logos, "similar
+                // properties" carousels, 3D-tour thumbnails, etc. These
+                // are real <img> tags of plausible photo size, so the old
+                // size-only filter counted them as listing photos.
+                let hint = (e.getAttribute('alt') || '') + ' ' + (e.className || '') + ' ' + (e.id || '');
+                let node = e;
+                for (let i = 0; i < 5 && node; i++) {
+                    hint += ' ' + (node.className || '') + ' ' + (node.id || '') + ' ' + (node.getAttribute && (node.getAttribute('data-testid') || '') || '');
+                    node = node.parentElement;
+                }
                 return {
                     src: e.currentSrc || e.src || e.getAttribute('data-src') || '',
                     alt: (e.getAttribute('alt') || '').trim(),
                     w: r.width,
                     h: r.height,
+                    hint: hint.toLowerCase(),
                 };
             })"""
         )
-        # Crude filter: ignore tiny icons/logos by rendered size. Then
+        # Terms that mark an image as NOT a real listing photo even though
+        # it's large enough to pass the size filter below.
+        NON_GALLERY_HINTS = [
+            "logo", "avatar", "icon", "footer", "header", "navbar",
+            "partenaire", "partner", "sponsor",
+            "carte", "mapbox", "map-", "-map", "plan-quartier",
+            "dpe", "energie", "energy", "diagnostic",
+            "similaire", "similar", "recommand", "vous-aimerez", "a-proximite",
+            "agence", "agent-", "-agent", "profil", "profile",
+            "georisque",
+        ]
+        # Crude size filter: ignore tiny icons/logos by rendered size. Then
         # dedupe by normalized src — carousel/gallery widgets very
         # commonly clone slides in the DOM for a seamless infinite-loop
         # effect (or repeat the same photo in a hero + thumbnail strip),
         # which was inflating the count 4-5x on real listings (a 14-photo
         # listing was reporting 70). Query strings are stripped since the
         # same photo often reappears with different resize/cache params.
+        # Then exclude anything matching NON_GALLERY_HINTS — this was added
+        # after SeLoger reported 26 photos for a listing with 16: the extra
+        # 10 were a mix of the DPE diagram, a Mapbox neighbourhood map, the
+        # listing agent's profile photo, and partner/footer logos, all of
+        # which are large enough to pass the size filter above.
         seen_srcs = set()
         real_photo_count = 0
         real_photos_with_alt = 0
         for item in img_data:
             if item["w"] < 150 or item["h"] < 100:
+                continue
+            if any(term in item["hint"] for term in NON_GALLERY_HINTS):
                 continue
             normalized_src = item["src"].split("?")[0].strip()
             if not normalized_src or normalized_src in seen_srcs:
