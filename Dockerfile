@@ -11,6 +11,11 @@ RUN pip install --no-cache-dir -r requirements.txt gunicorn
 COPY . .
 
 ENV PORT=8080
+# Python buffers stdout/stderr by default when not attached to a TTY —
+# in a container that means log lines can sit in a buffer and never
+# reach the platform's log collector. This forces unbuffered I/O so
+# logger.error() calls actually show up in Render's Logs tab.
+ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
 
 # 2 workers, 1 thread each: Playwright launches a real Chromium process

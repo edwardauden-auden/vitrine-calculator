@@ -1,13 +1,14 @@
 import logging
 import os
 import re
+import sys
 import time
 import traceback
 import uuid
 
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True)
 logger = logging.getLogger("vitrine")
 
 from analyzer import analyze_url, AnalysisFailed
@@ -106,7 +107,11 @@ def analyze():
         logger.warning("Analysis failed gracefully for %s: %s", url, e.reason)
     except Exception as e:
         auto_failed_reason = "Une erreur inattendue est survenue pendant l'analyse automatique."
-        logger.error("Unexpected error analyzing %s: %s\n%s", url, e, traceback.format_exc())
+        tb = traceback.format_exc()
+        logger.error("Unexpected error analyzing %s: %s\n%s", url, e, tb)
+        # Belt-and-suspenders: print too, in case something upstream of the
+        # logging module (e.g. gunicorn's own config) is swallowing it.
+        print(f"[ANALYZE ERROR] {url}: {e}\n{tb}", flush=True)
 
     used_manual_fallback = False
     if extraction is None or (extraction.get("image_count", 0) == 0 and not extraction.get("description_text")):
