@@ -34,8 +34,33 @@ class AnalysisFailed(Exception):
 
 def analyze_url(url: str, screenshot_path: str) -> dict:
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page(viewport={"width": 1400, "height": 1000})
+        # Memory-trimming flags: the free host tier this runs on has only
+        # 512MB total, and a default Chromium launch alone can eat well
+        # past that, causing the whole process to get OOM-killed. These
+        # flags disable GPU compositing, shared-memory usage (/dev/shm is
+        # tiny in most containers and a common crash cause), and other
+        # background Chrome features we don't need for a screenshot+DOM-read.
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--no-sandbox",
+                "--disable-extensions",
+                "--disable-background-networking",
+                "--disable-default-apps",
+                "--disable-sync",
+                "--metrics-recording-only",
+                "--mute-audio",
+                "--no-first-run",
+                "--disable-backgrounding-occluded-windows",
+                "--disable-renderer-backgrounding",
+                "--js-flags=--max-old-space-size=256",
+            ],
+        )
+        # Smaller viewport = smaller compositing/screenshot buffer = less
+        # peak memory during full-page capture.
+        page = browser.new_page(viewport={"width": 1100, "height": 800})
         try:
             page.goto(url, wait_until="networkidle", timeout=20000)
         except PWTimeout:

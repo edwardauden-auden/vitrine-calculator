@@ -18,7 +18,10 @@ ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
 
-# 2 workers, 1 thread each: Playwright launches a real Chromium process
-# per request, which is memory-heavy — keep concurrency low on a small
-# VM rather than risk OOM from too many workers.
-CMD ["gunicorn", "--workers=2", "--threads=1", "--timeout=60", "--bind=0.0.0.0:8080", "app:app"]
+# Single worker: this is running on a 512MB free-tier instance, and each
+# concurrent Chromium launch can use 200-300MB+ on its own. Running 2
+# workers meant 2 possible simultaneous Chromium processes, which was
+# almost certainly what pushed memory over the limit and got the whole
+# container OOM-killed in a restart loop. One worker means requests queue
+# instead of running in parallel — slower under load, but it won't crash.
+CMD ["gunicorn", "--workers=1", "--threads=1", "--timeout=90", "--bind=0.0.0.0:8080", "app:app"]
