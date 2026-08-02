@@ -77,23 +77,36 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
                 # sites work fine on the free local path above.
                 zenrows_key = os.environ.get("ZENROWS_API_KEY", "").strip()
                 if not zenrows_key:
+                    print(f"[ZENROWS] no ZENROWS_API_KEY configured — skipping fallback for {url} ({first_failure.reason})", flush=True)
                     raise
+                print(f"[ZENROWS] local Chromium blocked/failed for {url} ({first_failure.reason}) — attempting ZenRows fallback", flush=True)
                 try:
+                    # proxy_region=eu: route through European residential
+                    # IPs — we're only ever targeting French sites, and a
+                    # non-French exit IP is one more thing DataDome-style
+                    # protection can flag. Auto-rotate + residential IPs
+                    # are already on by default per ZenRows' docs; this
+                    # just narrows the region.
                     zr_browser = p.chromium.connect_over_cdp(
-                        f"wss://browser.zenrows.com?apikey={zenrows_key}",
+                        f"wss://browser.zenrows.com?apikey={zenrows_key}&proxy_region=eu",
                         timeout=20000,
                     )
-                except Exception:
+                except Exception as e:
                     # ZenRows itself unreachable/misconfigured — surface
                     # the original bot-block reason, not a confusing
                     # connection error about an internal fallback service.
+                    print(f"[ZENROWS] connect_over_cdp failed for {url}: {e}", flush=True)
                     raise first_failure
                 try:
                     zr_page = zr_browser.new_page(viewport=VIEWPORT)
-                    return _extract_from_page(zr_page, url, screenshot_path)
-                except AnalysisFailed:
+                    result = _extract_from_page(zr_page, url, screenshot_path)
+                    print(f"[ZENROWS] fallback succeeded for {url}", flush=True)
+                    return result
+                except AnalysisFailed as zr_failure:
+                    print(f"[ZENROWS] fallback also failed for {url}: {zr_failure.reason}", flush=True)
                     raise
-                except Exception:
+                except Exception as e:
+                    print(f"[ZENROWS] fallback raised unexpected error for {url}: {e}", flush=True)
                     raise first_failure
                 finally:
                     zr_browser.close()
