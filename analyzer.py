@@ -79,7 +79,9 @@ def analyze_url(url: str, screenshot_path: str) -> dict:
         try:
             page = browser.new_page(viewport=VIEWPORT)
             try:
-                return _extract_from_page(page, url, screenshot_path)
+                result = _extract_from_page(page, url, screenshot_path)
+                result["via_zenrows"] = False
+                return result
             except AnalysisFailed as first_failure:
                 # Blocked or timed out on a site we didn't already know
                 # about. If a ZenRows key is configured, retry once
@@ -122,6 +124,7 @@ def _run_via_zenrows(p, url: str, screenshot_path: str, zenrows_key: str) -> dic
     try:
         zr_page = zr_browser.new_page(viewport=VIEWPORT)
         result = _extract_from_page(zr_page, url, screenshot_path)
+        result["via_zenrows"] = True
         print(f"[ZENROWS] succeeded for {url}", flush=True)
         return result
     except AnalysisFailed as zr_failure:
@@ -262,6 +265,7 @@ def _extract_from_page(page, url: str, screenshot_path: str) -> dict:
         seen_srcs = set()
         real_photo_count = 0
         real_photos_with_alt = 0
+        photo_urls = []
         for item in img_data:
             if item["w"] < 150 or item["h"] < 100:
                 continue
@@ -274,6 +278,13 @@ def _extract_from_page(page, url: str, screenshot_path: str) -> dict:
             real_photo_count += 1
             if item["alt"]:
                 real_photos_with_alt += 1
+            # Keep the actual URLs too (not just the count) — this is the
+            # sample handed to the vision-model photo-quality pass. Capped
+            # here since analyzing more than a handful of photos per
+            # request isn't worth the extra latency/cost for what's meant
+            # to be a representative sample, not an exhaustive review.
+            if item["src"].startswith(("http://", "https://")) and len(photo_urls) < 8:
+                photo_urls.append(item["src"])
         image_alt_ratio = (real_photos_with_alt / real_photo_count) if real_photo_count else None
 
         # Trust the site's own displayed photo count over our DOM count
@@ -386,6 +397,7 @@ def _extract_from_page(page, url: str, screenshot_path: str) -> dict:
             "has_floor_plan": has_floor_plan,
             "property_type": property_type,
             "screenshot_path": screenshot_path,
+            "photo_urls": photo_urls,
             "seo": {
                 "title_text": title_text,
                 "meta_description": meta_description,

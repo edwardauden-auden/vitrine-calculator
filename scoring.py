@@ -253,6 +253,100 @@ def score_seo(seo_extraction: dict) -> ScoreResult:
     return ScoreResult(total=total, max_total=max_total, grade=grade, signals=signals)
 
 
+def score_photo_quality(pq: dict) -> ScoreResult:
+    """
+    Deliberately separate from score_listing() and score_seo(): this is
+    the only score that actually looks AT the photos rather than the
+    surrounding page — it comes from vision.analyze_photo_quality(), a
+    Gemini vision pass over a sample of the real gallery photos
+    (vision.MAX_PHOTOS of them). No amount of DOM-scraping can tell you a
+    photo is crooked, dark, or oversaturated; this can.
+
+    Optional by design: if the vision pass wasn't run (no API key
+    configured, or it failed), app.py simply never calls this — there's
+    no "empty" state to handle here, only present-or-absent upstream.
+
+    pq keys (all produced by vision.analyze_photo_quality):
+      - sample_size: int (how many photos were actually judged)
+      - pct_straight, pct_well_exposed, pct_sharp, pct_natural_editing: 0-100
+      - consistent_style: bool
+      - has_watermark, shows_clutter, shows_people: bool
+      - notes: str (short free-text callout from the model, may be "")
+    """
+    signals = []
+    total = 0
+    n = pq.get("sample_size", 0)
+    sample_note = f" (basé sur {n} photo{'s' if n != 1 else ''} analysée{'s' if n != 1 else ''} par IA)" if n else ""
+
+    def _threshold_signal(key, label, pts_max, good_min, warn_min, good_msg, warn_msg, bad_msg):
+        nonlocal total
+        pct_val = pq.get(key, 0)
+        if pct_val >= good_min:
+            pts, status, detail = pts_max, "good", good_msg.format(pct=pct_val)
+        elif pct_val >= warn_min:
+            pts, status, detail = round(pts_max * 0.5), "warning", warn_msg.format(pct=pct_val)
+        else:
+            pts, status, detail = 0, "bad", bad_msg.format(pct=pct_val)
+        signals.append(Signal(key, label, pts, pts_max, status, detail + sample_note,
+                               upsell="photo_editing" if status != "good" else None))
+        total += pts
+
+    _threshold_signal(
+        "pct_straight", "Horizon et lignes droites", 20, 90, 60,
+        "{pct}% des photos ont des lignes bien droites.",
+        "{pct}% des photos ont des lignes droites — {pct}% seulement, certaines semblent penchées.",
+        "Beaucoup de photos semblent penchées ({pct}% seulement ont des lignes droites) — cela donne une impression amateur.",
+    )
+    _threshold_signal(
+        "pct_well_exposed", "Exposition / luminosité", 20, 90, 60,
+        "{pct}% des photos ont une exposition correcte.",
+        "{pct}% des photos ont une bonne exposition — le reste est trop sombre ou surexposé.",
+        "Beaucoup de photos sont trop sombres ou surexposées ({pct}% seulement bien exposées).",
+    )
+    _threshold_signal(
+        "pct_sharp", "Netteté", 15, 90, 60,
+        "{pct}% des photos sont nettes.",
+        "{pct}% des photos sont nettes — certaines semblent floues.",
+        "Beaucoup de photos semblent floues ({pct}% seulement nettes).",
+    )
+    _threshold_signal(
+        "pct_natural_editing", "Retouche naturelle", 15, 80, 40,
+        "Les photos ont un rendu naturel, pas de sur-retouche visible.",
+        "{pct}% des photos ont un rendu naturel — certaines semblent sur-retouchées (HDR excessif, couleurs trop saturées).",
+        "Plusieurs photos semblent sur-retouchées (HDR excessif, couleurs trop saturées) — cela peut sembler trompeur aux acheteurs.",
+    )
+
+    if pq.get("consistent_style", True):
+        pts, status, detail = 15, "good", "Les photos ont un style cohérent (lumière, couleurs) d'une image à l'autre."
+    else:
+        pts, status, detail = 0, "bad", "Les photos semblent avoir des styles mélangés (certaines pro, d'autres amateur, ou jour/nuit) — cela nuit à l'impression d'ensemble."
+    signals.append(Signal("consistent_style", "Cohérence du style", pts, 15, status, detail + sample_note,
+                           upsell="photo_editing" if status != "good" else None))
+    total += pts
+
+    issues = []
+    if pq.get("has_watermark"):
+        issues.append("un filigrane/logo visible sur au moins une photo")
+    if pq.get("shows_clutter"):
+        issues.append("du désordre ou des affaires personnelles visibles")
+    if pq.get("shows_people"):
+        issues.append("une personne visible sur au moins une photo")
+    if issues:
+        pts, status = 0, "bad"
+        detail = "Présentation à corriger : " + ", ".join(issues) + "."
+    else:
+        pts, status = 15, "good"
+        detail = "Aucun filigrane, désordre ou personne visible détecté — présentation professionnelle."
+    signals.append(Signal("clean_presentation", "Présentation professionnelle", pts, 15, status, detail + sample_note,
+                           upsell="upload_photos" if status != "good" else None))
+    total += pts
+
+    max_total = 20 + 20 + 15 + 15 + 15 + 15  # = 100
+    grade = _grade_for(total, max_total)
+    result = ScoreResult(total=total, max_total=max_total, grade=grade, signals=signals)
+    return result
+
+
 def _grade_for(total, max_total):
     pct = 100 * total / max_total
     if pct >= 80:

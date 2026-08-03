@@ -293,6 +293,55 @@ button.primary:hover { background: #164a3d; }
   .seo-score-header { flex-direction: column; text-align: center; }
 }
 
+.photo-score {
+  padding: 30px 0 10px;
+  border-top: 1px solid var(--border);
+  margin-top: 10px;
+}
+.photo-score-header {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  max-width: 700px;
+  margin: 0 auto 24px;
+}
+.photo-ring {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  font-weight: 700;
+  color: white;
+  /* Third distinct colour (purple), alongside the green main score and
+     the blue SEO score — this is the only one that comes from actually
+     looking at the photos rather than the page around them. */
+  background: conic-gradient(#7c4dcc calc(var(--pct) * 1%), #e6e2d8 0);
+}
+.photo-ring .inner {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+.photo-ring .num { font-size: 1.25rem; line-height: 1; }
+.photo-ring .grade { font-size: 0.68rem; color: var(--ink-soft); font-weight: 500; margin-top: 2px; }
+
+.photo-score-intro h2 { margin: 0 0 6px; font-size: 1.15rem; }
+.photo-score-intro p { margin: 0; color: var(--ink-soft); font-size: 0.9rem; }
+
+@media (max-width: 560px) {
+  .photo-score-header { flex-direction: column; text-align: center; }
+}
+
 .addons {
   padding: 20px 0 10px;
 }

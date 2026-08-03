@@ -6,3 +6,8 @@ Flask>=3.0
 # "BrowserType.launch: Executable doesn't exist..." — match this to
 # whatever version tag the Dockerfile's FROM line uses.
 playwright==1.56.0
+
+# For the optional photo-quality vision pass (vision.py): downloading and
+# downsizing sample photos before sending them to the Gemini API.
+requests>=2.31
+Pillow>=10.0

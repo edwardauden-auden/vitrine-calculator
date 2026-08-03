@@ -12,7 +12,8 @@ logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True)
 logger = logging.getLogger("vitrine")
 
 from analyzer import analyze_url, AnalysisFailed
-from scoring import score_listing, score_seo
+from scoring import score_listing, score_seo, score_photo_quality
+from vision import analyze_photo_quality
 
 app = Flask(__name__)
 SCREENSHOT_DIR = os.path.join(app.root_path, "static", "screenshots")
@@ -72,6 +73,11 @@ UPSELLS = {
         "title": "Audit et optimisation SEO",
         "pitch": "Sur un portail, vous ne pouvez rien changer à ça. Sur votre propre site, si — on s'en occupe pour vous.",
         "cta": "Voir l'offre SEO",
+    },
+    "photo_editing": {
+        "title": "Retouche photo professionnelle",
+        "pitch": "Redressement, exposition, couleurs harmonisées entre toutes les photos — sans nouveau shooting.",
+        "cta": "Voir l'offre retouche",
     },
 }
 
@@ -164,6 +170,39 @@ def analyze():
             upsell = UPSELLS.get(s.upsell) if s.upsell else None
             seo_signals_with_upsell.append((s, upsell))
 
+    # Photo-quality score: the only section that actually looks AT the
+    # photos rather than the surrounding page (crooked, dark, over-edited,
+    # inconsistent style, watermarks/clutter/people). Optional and
+    # fail-open by design — skipped entirely if GEMINI_API_KEY isn't set
+    # in the environment (same pattern as ZENROWS_API_KEY: added directly
+    # in Render's dashboard, never passed through this code), if manual
+    # fallback was used (no real photo URLs to judge), or if the vision
+    # call itself fails for any reason. Also skipped when the listing was
+    # fetched via ZenRows — that path is already the slowest/riskiest for
+    # the gunicorn timeout, so we don't stack another external API call
+    # on top of it.
+    photo_quality_result = None
+    photo_quality_signals_with_upsell = []
+    photo_quality_notes = None
+    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if (
+        not used_manual_fallback
+        and gemini_key
+        and extraction.get("photo_urls")
+        and not extraction.get("via_zenrows")
+    ):
+        try:
+            pq_data = analyze_photo_quality(extraction["photo_urls"], gemini_key)
+        except Exception as e:
+            pq_data = None
+            logger.warning("Photo quality vision pass failed for %s: %s", url, e)
+        if pq_data:
+            photo_quality_result = score_photo_quality(pq_data)
+            photo_quality_notes = pq_data.get("notes") or None
+            for s in photo_quality_result.signals:
+                upsell = UPSELLS.get(s.upsell) if s.upsell else None
+                photo_quality_signals_with_upsell.append((s, upsell))
+
     screenshot_url = None
     if extraction.get("screenshot_path") and os.path.exists(extraction["screenshot_path"]):
         screenshot_url = url_for("static", filename=f"screenshots/{os.path.basename(extraction['screenshot_path'])}")
@@ -175,6 +214,9 @@ def analyze():
         signals_with_upsell=signals_with_upsell,
         seo_result=seo_result,
         seo_signals_with_upsell=seo_signals_with_upsell,
+        photo_quality_result=photo_quality_result,
+        photo_quality_signals_with_upsell=photo_quality_signals_with_upsell,
+        photo_quality_notes=photo_quality_notes,
         screenshot_url=screenshot_url,
         used_manual_fallback=used_manual_fallback,
         auto_failed_reason=auto_failed_reason,

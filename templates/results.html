@@ -101,6 +101,47 @@
   </section>
   {% endif %}
 
+  {% if photo_quality_result %}
+  <section class="photo-score">
+    <div class="wrap">
+      <div class="photo-score-header">
+        <div class="photo-ring" style="--pct: {{ photo_quality_result.percent }}">
+          <div class="inner">
+            <div class="num">{{ photo_quality_result.percent }}%</div>
+            <div class="grade">Note {{ photo_quality_result.grade }}</div>
+          </div>
+        </div>
+        <div class="photo-score-intro">
+          <h2>Qualité visuelle des photos</h2>
+          <p>
+            Analysé par IA à partir d'un échantillon des vraies photos de l'annonce : lignes droites, exposition,
+            netteté, retouche naturelle, cohérence du style, et présentation générale.
+            {% if photo_quality_notes %}<strong>{{ photo_quality_notes }}</strong>{% endif %}
+          </p>
+        </div>
+      </div>
+
+      <div class="signal-list">
+        {% for s, upsell in photo_quality_signals_with_upsell %}
+        <div class="signal">
+          <div class="dot {{ s.status }}"></div>
+          <div class="signal-body">
+            <div class="row1">
+              <h4>{{ s.label }}</h4>
+              <span class="pts">{{ s.points }}/{{ s.max_points }} pts</span>
+            </div>
+            <p>{{ s.detail }}</p>
+            {% if upsell %}
+            <div class="upsell-chip">🛠 {{ upsell.title }} — {{ upsell.pitch }}</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   <section class="addons">
     <div class="wrap">
       <h2>Envie d'aller plus loin ?</h2>
