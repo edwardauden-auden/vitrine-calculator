@@ -397,14 +397,18 @@ button.primary:hover { background: #164a3d; }
 }
 
 .addon-cta {
-  display: inline-block;
+  display: block;
+  text-align: center;
   margin: 14px 18px 20px;
-  color: var(--accent);
+  background: var(--accent);
+  color: white;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   text-decoration: none;
+  padding: 11px 16px;
+  border-radius: 9px;
 }
-.addon-cta:hover { text-decoration: underline; }
+.addon-cta:hover { background: #164a3d; }
 
 @media (max-width: 640px) {
   .addon-grid { grid-template-columns: 1fr; }

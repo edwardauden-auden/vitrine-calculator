@@ -48,6 +48,13 @@ graphic burned into the image?
 laundry, etc.?
 - shows_people: any person (or a reflection of one, e.g. the \
 photographer) visible?
+- is_interior_room: is this a photo of an interior room (bedroom, living \
+room, kitchen, dining room, office)? false for exterior/facade shots, \
+gardens, bathrooms, hallways, floor plans, DPE diagrams, or maps.
+- is_empty_room: ONLY meaningful when is_interior_room is true — is the \
+room unfurnished/empty (no bed, sofa, table, or other furniture), the \
+kind of room virtual staging would help sell? false if is_interior_room \
+is false.
 
 Then judge the SET as a whole:
 - consistent_style: do the photos share a similar color grading/style, \
@@ -61,7 +68,7 @@ Respond with ONLY this JSON shape, no other text:
   "photos": [
     {"straight": true, "well_exposed": true, "sharp": true, \
 "natural_editing": true, "has_watermark": false, "shows_clutter": false, \
-"shows_people": false}
+"shows_people": false, "is_interior_room": true, "is_empty_room": false}
   ],
   "consistent_style": true,
   "notes": ""
@@ -132,7 +139,10 @@ def analyze_photo_quality(photo_urls: list, api_key: str) -> dict | None:
     def pct(key):
         return round(100 * sum(1 for p in photos if p.get(key)) / n)
 
-    print(f"[GEMINI] photo-quality pass succeeded for {n} photo(s)", flush=True)
+    interior_room_count = sum(1 for p in photos if p.get("is_interior_room"))
+    empty_room_count = sum(1 for p in photos if p.get("is_interior_room") and p.get("is_empty_room"))
+
+    print(f"[GEMINI] photo-quality pass succeeded for {n} photo(s), {empty_room_count} empty room(s) detected", flush=True)
     return {
         "sample_size": n,
         "pct_straight": pct("straight"),
@@ -143,5 +153,7 @@ def analyze_photo_quality(photo_urls: list, api_key: str) -> dict | None:
         "has_watermark": any(p.get("has_watermark") for p in photos),
         "shows_clutter": any(p.get("shows_clutter") for p in photos),
         "shows_people": any(p.get("shows_people") for p in photos),
+        "interior_room_count": interior_room_count,
+        "empty_room_count": empty_room_count,
         "notes": (parsed.get("notes") or "").strip(),
     }

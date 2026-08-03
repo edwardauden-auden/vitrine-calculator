@@ -11,7 +11,9 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True)
 logger = logging.getLogger("vitrine")
 
-from analyzer import analyze_url, AnalysisFailed
+from urllib.parse import urlparse
+
+from analyzer import analyze_url, AnalysisFailed, KNOWN_BLOCKED_PORTALS
 from scoring import score_listing, score_seo, score_photo_quality
 from vision import analyze_photo_quality
 
@@ -184,6 +186,7 @@ def analyze():
     photo_quality_result = None
     photo_quality_signals_with_upsell = []
     photo_quality_notes = None
+    pq_data = None
     gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if (
         not used_manual_fallback
@@ -207,6 +210,61 @@ def analyze():
     if extraction.get("screenshot_path") and os.path.exists(extraction["screenshot_path"]):
         screenshot_url = url_for("static", filename=f"screenshots/{os.path.basename(extraction['screenshot_path'])}")
 
+    # Personalized add-on pitches — using the actual analysis (portal vs
+    # own site, detected empty rooms, real photo/SEO numbers) instead of
+    # generic copy, so each card reads like it was written for this
+    # specific listing rather than a static ad.
+    domain = (urlparse(url).netloc or "").replace("www.", "")
+    is_portal = any(d in url.lower() for d in KNOWN_BLOCKED_PORTALS)
+    if is_portal:
+        dedicated_site_pitch = (
+            f"Sur {domain}, ce bien est noyé parmi des centaines d'autres annonces et vous ne contrôlez ni le "
+            f"référencement ni la présentation — un acheteur peut atterrir sur le bien du confrère juste à côté. "
+            f"On crée une page 100% dédiée à ce bien, qui vous appartient et remonte sur Google à votre nom."
+        )
+    else:
+        dedicated_site_pitch = (
+            "Une page 100% dédiée à ce bien, avec un nom de domaine sur-mesure — pensée pour convertir, "
+            "pas noyée parmi des centaines d'autres annonces sur un portail."
+        )
+
+    if seo_result:
+        seo_addon_pitch = (
+            f"Votre score SEO sur cette page est de {seo_result.percent}%. "
+            f"On identifie les mots-clés que tapent vos futurs acheteurs et on optimise votre site pour qu'il "
+            f"remonte dans les résultats Google."
+        )
+    else:
+        seo_addon_pitch = (
+            "On identifie les mots-clés que tapent vos futurs acheteurs et on optimise votre site existant pour "
+            "qu'il remonte dans les résultats Google."
+        )
+
+    empty_room_count = pq_data.get("empty_room_count", 0) if pq_data else 0
+    if empty_room_count > 0:
+        room_word = "pièce vide" if empty_room_count == 1 else "pièces vides"
+        staging_addon_pitch = (
+            f"On a repéré {empty_room_count} {room_word} sur les photos de cette annonce — souhaitez-vous les "
+            f"meubler virtuellement pour aider les acheteurs à se projeter ?"
+        )
+    else:
+        staging_addon_pitch = (
+            "Vos pièces vides ou datées, meublées et modernisées numériquement en quelques heures — sans "
+            "travaux ni déplacement de meubles."
+        )
+
+    img_count = extraction.get("image_count", 0)
+    if img_count > 0:
+        video_addon_pitch = (
+            f"Vos {img_count} photos existantes transformées en visite vidéo dynamique, sans tournage ni "
+            f"matériel supplémentaire — un contenu qui triple en moyenne les clics sur une annonce."
+        )
+    else:
+        video_addon_pitch = (
+            "Vos photos existantes transformées en visite vidéo dynamique, sans tournage ni matériel "
+            "supplémentaire — un contenu qui triple en moyenne les clics sur une annonce."
+        )
+
     return render_template(
         "results.html",
         url=url,
@@ -220,6 +278,11 @@ def analyze():
         screenshot_url=screenshot_url,
         used_manual_fallback=used_manual_fallback,
         auto_failed_reason=auto_failed_reason,
+        is_portal=is_portal,
+        dedicated_site_pitch=dedicated_site_pitch,
+        seo_addon_pitch=seo_addon_pitch,
+        staging_addon_pitch=staging_addon_pitch,
+        video_addon_pitch=video_addon_pitch,
     )
 
 
